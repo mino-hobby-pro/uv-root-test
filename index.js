@@ -1,62 +1,67 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
+const serverless = require('serverless-http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const abyssDir = path.join(__dirname, 'abyss');
+const ABYSS_DIR = path.join(__dirname, 'abyss');
 
-// Serve static files under /abyss/<filename>
-app.use('/abyss', express.static(abyssDir, {
-  index: false,
+// Root test: returns plain text "test"
+app.get('/', (req, res) => {
+  res.type('text').send('test');
+});
+
+// Serve static files under /abyss so each file is directly accessible
+// index.html will be served automatically when requesting /abyss/ (trailing slash)
+app.use('/abyss', express.static(ABYSS_DIR, {
+  index: ['index.html', 'index.htm'],
   extensions: ['html', 'htm']
 }));
 
-// Root test
-app.get('/', (req, res) => {
-  res.type('text/plain').send('test');
+// /abyss endpoint (without trailing slash) — list all files in /abyss
+app.get('/abyss', (req, res, next) => {
+  // If a directory index file exists and the request explicitly wants the directory,
+  // express.static above will handle /abyss/ (with slash). Here we return a listing.
+  fs.readdir(ABYSS_DIR, { withFileTypes: true }, (err, entries) => {
+    if (err) {
+      // If directory doesn't exist or other error, forward to error handler
+      return next(err);
+    }
+    // Build list of filenames (files only)
+    const files = entries
+      .filter(e => e.isFile())
+      .map(e => e.name);
+
+    // Return JSON array of filenames and also plain text option
+    // Client can use either; JSON is convenient for programmatic use.
+    res.json({ files });
+  });
 });
 
-// /abyss -> list all files in abyss directory and return links
-app.get('/abyss', async (req, res) => {
-  try {
-    const files = await fs.readdir(abyssDir, { withFileTypes: true });
-    const fileNames = files
-      .filter(f => f.isFile())
-      .map(f => f.name);
-
-    // Build simple HTML listing with links to each file
-    const listHtml = fileNames.map(name => {
-      const href = path.posix.join('/abyss', encodeURIComponent(name));
-      return `<li><a href="${href}">${name}</a></li>`;
-    }).join('\n');
-
-    const html = `<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <title>/abyss files</title>
-</head>
-<body>
-  <h1>/abyss にあるファイル一覧</h1>
-  <ul>
-    ${listHtml}
-  </ul>
-</body>
-</html>`;
-
-    res.type('html').send(html);
-  } catch (err) {
-    console.error(err);
-    res.status(500).type('text/plain').send('Failed to read abyss directory');
-  }
+// Optional: endpoint to return filenames as plain text (one per line)
+app.get('/abyss/list.txt', (req, res, next) => {
+  fs.readdir(ABYSS_DIR, { withFileTypes: true }, (err, entries) => {
+    if (err) return next(err);
+    const files = entries.filter(e => e.isFile()).map(e => e.name).join('\n');
+    res.type('text').send(files);
+  });
 });
 
-// Fallback for other routes (optional): return 404
-app.use((req, res) => {
-  res.status(404).type('text/plain').send('Not Found');
+// Basic error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).type('text').send('Internal Server Error');
 });
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+// Start server when run locally
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    console.log(`Root test: http://localhost:${PORT}/`);
+    console.log(`Abyss index: http://localhost:${PORT}/abyss`);
+  });
+}
+
+// Export handler for serverless platforms (Vercel)
+module.exports = serverless(app);
