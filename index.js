@@ -13,7 +13,7 @@ app.get('/api/mp3/:videoId', async (req, res, next) => {
     const videoId = req.params.videoId;
     if (!videoId) return res.status(400).send("Video ID is required");
 
-    const cliptoUrl = `https://www.clipto.com/api/youtube/mp3?url=https://www.youtube.com/watch?v=${videoId}&csrfToken=mlD3PL33-WlY6O4MHQoC2QElvSEk2nEBiSVQ`;
+    const cliptoUrl = `https://www.clipto.com/api/youtube/mp3?url=https://www.youtube.com/watch?v=${videoId}&csrfToken=YrbTGlag-GmobCwzxxjTpoIRHSM_n_JY-420`;
 
     try {
         // redirect: 'follow' により、最終的なMP3のURLまで自動で追跡します
