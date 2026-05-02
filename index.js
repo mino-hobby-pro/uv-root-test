@@ -7,24 +7,36 @@ const PROXY_DIR = path.join(__dirname, 'proxy');
 
 // 1. ルート直下のテスト
 app.get('/', (req, res) => {
-  res.send('test');
+  res.send('test2');
 });
 
-// 2. /abyss 自体の静的ファイル配信
+const PROXY_ENDPOINTS = [
+  'prxy',
+  'baremux',
+  'epoxy',
+  'libcurl',
+  'register-sw.mjs',
+  'uv'
+];
+
+// 静的ファイルの提供設定
 app.use('/proxy', express.static(PROXY_DIR));
 
-// 3. 【重要】UVプロキシのパス置き換え検知＆自動解決ロジック
-// ルート(/)や/abyss以外へのリクエスト（/static/等）が来た場合、abyss内を探しに行く
 app.use((req, res, next) => {
-  // リクエストされたパスが abyss フォルダ内に実在するかチェック
-  const expectedPath = path.join(PROXY, req.path);
+  // リクエストされたパスから先頭のスラッシュを取り除いた名前を取得
+  const fileName = req.path.replace(/^\//, '');
 
-  if (fs.existsSync(expectedPath) && fs.lstatSync(expectedPath).isFile()) {
-    // ファイルが見つかったら、それを返す（これで /static/ が /abyss/static/ として機能する）
-    return res.sendFile(expectedPath);
+  // もしリクエストが対象リストに含まれている場合
+  if (PROXY_ENDPOINTS.includes(fileName)) {
+    // PROXY_DIR 内の該当ファイルを指すパスを作成
+    const targetPath = path.join(PROXY_DIR, fileName);
+
+    // ファイルが存在するか確認して送信
+    if (fs.existsSync(targetPath) && fs.lstatSync(targetPath).isFile()) {
+      return res.sendFile(targetPath);
+    }
   }
-  
-  // 見つからない場合は次の処理（404など）へ
+
   next();
 });
 
