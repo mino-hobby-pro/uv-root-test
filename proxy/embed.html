@@ -191,6 +191,72 @@
         });
 
         const connection = new BareMux.BareMuxConnection("/prxy/baremux/worker.js");
+        const wispServers = [
+            "wss://wisp.rhw.one/",     
+            "wss://wisp.webmc.fun/",
+            "wss://anura.pro/",
+            "wss://server.rubynetwork.co/wisp/",
+            "wss://wisp.mercurywork.shop/",    
+            "wss://wisp.43059.lrga.space/",
+            "wss://wisp.lrga.space/",
+            "wisp.artclass-eta.vercel.app",
+            "wss://wisp.gointerstellar.app/",
+            "wss://construction.services.codd70.ru/socket/",            
+            "wss://tomp.app/wisp/"
+        ];
+
+        let activeWispUrl = null;
+        async function checkWispServer(url) {
+            return new Promise((resolve) => {
+                let resolved = false;
+                try {
+                    const ws = new WebSocket(url);
+                    const timeout = setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            ws.close();
+                            resolve(false);
+                        }
+                    }, 3000);
+                    ws.onopen = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            ws.close();
+                            resolve(true);
+                        }
+                    };
+                    ws.onerror = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            ws.close();
+                            resolve(false);
+                        }
+                    };
+                } catch (e) {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(false);
+                    }
+                }
+            });
+        }
+        async function getAvailableWisp() {
+            if (activeWispUrl) return activeWispUrl;
+            
+            const statusText = document.getElementById('loading-status');
+            
+            for (const url of wispServers) {
+                if(statusText) statusText.textContent = `Testing Node: ${new URL(url).hostname}...`;
+                const isWorking = await checkWispServer(url);
+                if (isWorking) {
+                    activeWispUrl = url; 
+                    return url;
+                }
+            }
+            throw new Error("No usable nodes are currently available. All connections failed.");
+        }
 
         function search(input, template = "https://html.duckduckgo.com/html?t=h_&q=%s") {
             try { return new URL(input).toString(); } catch (err) {}
@@ -204,7 +270,9 @@
         async function getUV(input) {
             await registerSW();
             let url = search(input);
-            let wispUrl = "wss://wisp.rhw.one/";
+            
+            let wispUrl = await getAvailableWisp();
+            
             if ((await connection.getTransport()) !== "/prxy/epoxy/index.mjs") {
                 await connection.setTransport("/prxy/epoxy/index.mjs", [{ wisp: wispUrl }]);
             }
@@ -241,7 +309,7 @@
             if (!isValidUrl(url)) return showError(`Invalid destination: ${url}`);
 
             try {
-                statusText.textContent = "Infusing Elixir Proxy...";
+                statusText.textContent = "Locating optimal node...";
                 const proxiedUrl = await getUV(url);
                 
                 statusText.textContent = "Flowing to destination...";
@@ -258,15 +326,12 @@
             }
         }
 
-        // --- Optimization: Remove unnecessary delays ---
         window.addEventListener('hashchange', embedUrl);
 
-        // Immediate Execution Logic
         const init = () => {
             if (typeof __uv$config !== 'undefined') {
                 embedUrl();
             } else {
-                // If config is slow, poll aggressively (every 10ms) but only until loaded
                 const check = setInterval(() => {
                     if (typeof __uv$config !== 'undefined') {
                         clearInterval(check);
